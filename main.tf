@@ -78,8 +78,6 @@ resource "aws_cloudfront_function" "subdomain_router" {
 }
 
 resource "aws_ssm_parameter" "preview_bucket_name" {
-  provider = aws.us_east_1
-
   name      = "/__deployment__/applications/${var.service_name}/preview-bucket-name"
   type      = "String"
   overwrite = true
@@ -87,8 +85,6 @@ resource "aws_ssm_parameter" "preview_bucket_name" {
 }
 
 resource "aws_ssm_parameter" "cloudfront_function_arn" {
-  provider = aws.us_east_1
-
   name      = "/__deployment__/applications/${var.service_name}/cloudfront-function-arn"
   type      = "String"
   overwrite = true
@@ -96,8 +92,6 @@ resource "aws_ssm_parameter" "cloudfront_function_arn" {
 }
 
 resource "aws_ssm_parameter" "cloudfront_oai_path" {
-  provider = aws.us_east_1
-
   name      = "/__deployment__/applications/${var.service_name}/cloudfront-oai-path"
   type      = "String"
   overwrite = true
