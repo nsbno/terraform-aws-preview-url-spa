@@ -26,31 +26,56 @@ resource "aws_s3_bucket_versioning" "preview" {
   }
 }
 
-resource "aws_cloudfront_origin_access_identity" "preview" {
+resource "aws_s3_bucket_lifecycle_configuration" "preview" {
+  bucket = aws_s3_bucket.preview.id
+
+  rule {
+    id     = "delete-old-previews"
+    status = "Enabled"
+
+    expiration {
+      days = 90
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
+resource "aws_cloudfront_origin_access_control" "preview" {
   provider = aws.us_east_1
 
-  comment = "OAI for ${var.service_name} preview deployments"
+  name                              = "${var.service_name}-preview-oac"
+  description                       = "OAC for ${var.service_name} preview deployments"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 data "aws_iam_policy_document" "preview_bucket_policy" {
   statement {
-    sid    = "AllowCloudFrontOAI"
+    sid    = "AllowCloudFrontOAC"
     effect = "Allow"
 
     principals {
-      type        = "AWS"
-      identifiers = [aws_cloudfront_origin_access_identity.preview.iam_arn]
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
     }
 
     actions = [
-      "s3:GetObject",
-      "s3:ListBucket"
+      "s3:GetObject"
     ]
 
     resources = [
-      aws_s3_bucket.preview.arn,
       "${aws_s3_bucket.preview.arn}/*"
     ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.preview.arn]
+    }
   }
 }
 
@@ -153,12 +178,9 @@ resource "aws_cloudfront_distribution" "preview" {
   aliases             = ["*.${var.domain_name}"]
 
   origin {
-    domain_name = aws_s3_bucket.preview.bucket_regional_domain_name
-    origin_id   = "S3-${aws_s3_bucket.preview.id}"
-
-    s3_origin_config {
-      origin_access_identity = aws_cloudfront_origin_access_identity.preview.cloudfront_access_identity_path
-    }
+    domain_name              = aws_s3_bucket.preview.bucket_regional_domain_name
+    origin_id                = "S3-${aws_s3_bucket.preview.id}"
+    origin_access_control_id = aws_cloudfront_origin_access_control.preview.id
   }
 
   default_cache_behavior {
