@@ -140,33 +140,6 @@ resource "aws_acm_certificate_validation" "preview" {
   validation_record_fqdns = [for record in aws_route53_record.preview_cert_validation : record.fqdn]
 }
 
-resource "aws_cloudfront_cache_policy" "preview" {
-  provider = aws.us_east_1
-
-  name        = "${var.service_name}-preview-cache-policy"
-  comment     = "Cache policy for ${var.service_name} preview deployments"
-  default_ttl = 86400
-  max_ttl     = 31536000
-  min_ttl     = 0
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    cookies_config {
-      cookie_behavior = "none"
-    }
-
-    headers_config {
-      header_behavior = "none"
-    }
-
-    query_strings_config {
-      query_string_behavior = "none"
-    }
-
-    enable_accept_encoding_gzip   = true
-    enable_accept_encoding_brotli = true
-  }
-}
-
 resource "aws_cloudfront_distribution" "preview" {
   provider = aws.us_east_1
 
@@ -187,7 +160,6 @@ resource "aws_cloudfront_distribution" "preview" {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
     target_origin_id       = "S3-${aws_s3_bucket.preview.id}"
-    cache_policy_id        = aws_cloudfront_cache_policy.preview.id
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
 
