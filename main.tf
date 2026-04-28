@@ -6,14 +6,10 @@ locals {
 }
 
 resource "aws_s3_bucket" "preview" {
-  provider = aws.us_east_1
-
   bucket = local.preview_bucket_name
 }
 
 resource "aws_s3_bucket_public_access_block" "preview" {
-  provider = aws.us_east_1
-
   bucket = aws_s3_bucket.preview.id
 
   block_public_acls       = true
@@ -23,8 +19,6 @@ resource "aws_s3_bucket_public_access_block" "preview" {
 }
 
 resource "aws_s3_bucket_versioning" "preview" {
-  provider = aws.us_east_1
-
   bucket = aws_s3_bucket.preview.id
 
   versioning_configuration {
@@ -61,8 +55,6 @@ data "aws_iam_policy_document" "preview_bucket_policy" {
 }
 
 resource "aws_s3_bucket_policy" "preview" {
-  provider = aws.us_east_1
-
   bucket = aws_s3_bucket.preview.id
   policy = data.aws_iam_policy_document.preview_bucket_policy.json
 }
