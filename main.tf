@@ -105,39 +105,13 @@ data "aws_route53_zone" "preview" {
   name = var.zone_name
 }
 
-resource "aws_acm_certificate" "preview" {
-  provider = aws.us_east_1
+module "preview_certificate" {
+  source = "github.com/nsbno/terraform-aws-acm-certificate?ref=3.1.1"
 
-  domain_name       = "*.${var.domain_name}"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-resource "aws_route53_record" "preview_cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.preview.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
-
-  allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
-  ttl             = 60
-  type            = each.value.type
-  zone_id         = data.aws_route53_zone.preview.zone_id
-}
-
-resource "aws_acm_certificate_validation" "preview" {
-  provider = aws.us_east_1
-
-  certificate_arn         = aws_acm_certificate.preview.arn
-  validation_record_fqdns = [for record in aws_route53_record.preview_cert_validation : record.fqdn]
+  hosted_zone_name = var.zone_name
+  domain_name      = var.domain_name
+  create_wildcard  = true
+  region           = "us-east-1"
 }
 
 resource "aws_cloudfront_distribution" "preview" {
@@ -162,6 +136,7 @@ resource "aws_cloudfront_distribution" "preview" {
     target_origin_id       = "S3-${aws_s3_bucket.preview.id}"
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
 
     function_association {
       event_type   = "viewer-request"
@@ -188,7 +163,7 @@ resource "aws_cloudfront_distribution" "preview" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate_validation.preview.certificate_arn
+    acm_certificate_arn      = module.preview_certificate.wildcard_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }
