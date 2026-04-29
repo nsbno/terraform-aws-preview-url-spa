@@ -22,7 +22,7 @@ module "preview_url_spa" {
 ```
 
 This creates:
-- S3 bucket for preview deployments (`{account-id}-{service}-preview-v2`)
+- S3 bucket for preview deployments (`{account-id}-{service}-preview`)
 - CloudFront distribution with wildcard domain support (`*.infrademo-spa.test.example.com`)
 - CloudFront Function for subdomain-to-path routing (e.g., `pr-123.infrademo-spa.test.example.com` → `/pr-123/` in S3)
 - ACM certificate for wildcard domain
@@ -33,7 +33,7 @@ This creates:
 Preview URLs use a **separate CloudFront distribution** from production:
 
 - **Production**: `infrademo-spa.test.example.com` → `{account-id}-infrademo-spa-static-files` bucket
-- **Previews**: `pr-123.infrademo-spa.test.example.com` → `{account-id}-infrademo-spa-preview-v2` bucket
+- **Previews**: `pr-123.infrademo-spa.test.example.com` → `{account-id}-infrademo-spa-preview` bucket
 
 The preview distribution includes a CloudFront Function that routes subdomain requests to PR-specific folders in S3:
 - `pr-123.infrademo-spa.test.example.com/` → `/pr-123/index.html`

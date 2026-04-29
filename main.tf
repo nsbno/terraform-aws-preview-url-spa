@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 
 locals {
   account_id          = data.aws_caller_identity.current.account_id
-  preview_bucket_name = "${local.account_id}-${var.service_name}-preview-v2"
+  preview_bucket_name = "${local.account_id}-${var.service_name}-preview"
 }
 
 resource "aws_s3_bucket" "preview" {
