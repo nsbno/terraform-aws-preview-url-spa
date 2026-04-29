@@ -10,6 +10,7 @@ Remember to check out the [**variables**](variables.tf) and [**outputs**](output
 ```hcl
 module "preview_url_spa" {
   source = "github.com/nsbno/terraform-aws-preview-url-spa?ref=x.y.z"
+  count  = var.environment == "test" ? 1 : 0  # Optional: only create the preview URL resources in test environment
 
   providers = {
     aws.us_east_1 = aws.us_east_1
