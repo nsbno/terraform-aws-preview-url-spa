@@ -101,6 +101,13 @@ resource "aws_ssm_parameter" "preview_bucket_name" {
   value     = aws_s3_bucket.preview.id
 }
 
+resource "aws_ssm_parameter" "preview_domain_name" {
+  name      = "/__deployment__/applications/${var.service_name}/preview-domain-name"
+  type      = "String"
+  overwrite = true
+  value     = var.domain_name
+}
+
 data "aws_route53_zone" "preview" {
   name = var.zone_name
 }
