@@ -106,7 +106,8 @@ data "aws_route53_zone" "preview" {
 }
 
 module "preview_certificate" {
-  source = "github.com/nsbno/terraform-aws-acm-certificate?ref=3.1.1"
+  source           = "github.com/nsbno/terraform-aws-acm-certificate?ref=3.1.1"
+  region           = "us-east-1"
   hosted_zone_name = var.zone_name
   domain_name      = var.domain_name
   create_wildcard  = true
