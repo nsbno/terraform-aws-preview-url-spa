@@ -26,31 +26,56 @@ resource "aws_s3_bucket_versioning" "preview" {
   }
 }
 
-resource "aws_cloudfront_origin_access_identity" "preview" {
+resource "aws_s3_bucket_lifecycle_configuration" "preview" {
+  bucket = aws_s3_bucket.preview.id
+
+  rule {
+    id     = "delete-old-previews"
+    status = "Enabled"
+
+    expiration {
+      days = 90
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
+resource "aws_cloudfront_origin_access_control" "preview" {
   provider = aws.us_east_1
 
-  comment = "OAI for ${var.service_name} preview deployments"
+  name                              = "${var.service_name}-preview-oac"
+  description                       = "OAC for ${var.service_name} preview deployments"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 data "aws_iam_policy_document" "preview_bucket_policy" {
   statement {
-    sid    = "AllowCloudFrontOAI"
+    sid    = "AllowCloudFrontOAC"
     effect = "Allow"
 
     principals {
-      type        = "AWS"
-      identifiers = [aws_cloudfront_origin_access_identity.preview.iam_arn]
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
     }
 
     actions = [
-      "s3:GetObject",
-      "s3:ListBucket"
+      "s3:GetObject"
     ]
 
     resources = [
-      aws_s3_bucket.preview.arn,
       "${aws_s3_bucket.preview.arn}/*"
     ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.preview.arn]
+    }
   }
 }
 
@@ -76,16 +101,76 @@ resource "aws_ssm_parameter" "preview_bucket_name" {
   value     = aws_s3_bucket.preview.id
 }
 
-resource "aws_ssm_parameter" "cloudfront_function_arn" {
-  name      = "/__deployment__/applications/${var.service_name}/cloudfront-function-arn"
+resource "aws_ssm_parameter" "preview_domain_name" {
+  name      = "/__deployment__/applications/${var.service_name}/preview-domain-name"
   type      = "String"
   overwrite = true
-  value     = aws_cloudfront_function.subdomain_router.arn
+  value     = var.domain_name
 }
 
-resource "aws_ssm_parameter" "cloudfront_oai_path" {
-  name      = "/__deployment__/applications/${var.service_name}/cloudfront-oai-path"
-  type      = "String"
-  overwrite = true
-  value     = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.preview.id}"
+data "aws_route53_zone" "preview" {
+  name = var.zone_name
+}
+
+module "preview_certificate" {
+  source           = "github.com/nsbno/terraform-aws-acm-certificate?ref=3.1.1"
+  region           = "us-east-1"
+  hosted_zone_name = var.zone_name
+  domain_name      = var.domain_name
+  create_wildcard  = true
+}
+
+resource "aws_cloudfront_distribution" "preview" {
+  provider = aws.us_east_1
+
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "${var.service_name} preview deployments"
+  default_root_object = "index.html"
+  price_class         = "PriceClass_100"
+  aliases             = ["*.${var.domain_name}"]
+
+  origin {
+    domain_name              = aws_s3_bucket.preview.bucket_regional_domain_name
+    origin_id                = "S3-${aws_s3_bucket.preview.id}"
+    origin_access_control_id = aws_cloudfront_origin_access_control.preview.id
+  }
+
+  default_cache_behavior {
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "S3-${aws_s3_bucket.preview.id}"
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.subdomain_router.arn
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = module.preview_certificate.wildcard_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+}
+
+resource "aws_route53_record" "preview_wildcard" {
+  zone_id = data.aws_route53_zone.preview.zone_id
+  name    = "*.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.preview.domain_name
+    zone_id                = aws_cloudfront_distribution.preview.hosted_zone_id
+    evaluate_target_health = false
+  }
 }
