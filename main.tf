@@ -47,7 +47,7 @@ resource "aws_cloudfront_origin_access_control" "preview" {
   provider = aws.us_east_1
 
   name                              = "${var.service_name}-preview-oac"
-  description                       = "OAC for ${var.service_name} preview deployments"
+  description                       = "Grants CloudFront access to S3 preview bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
@@ -125,7 +125,7 @@ resource "aws_cloudfront_distribution" "preview" {
 
   enabled             = true
   is_ipv6_enabled     = true
-  comment             = "${var.service_name} preview deployments"
+  comment             = "Serves PR preview deployments for ${var.service_name}"
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
   aliases             = ["*.${var.domain_name}"]
@@ -142,7 +142,7 @@ resource "aws_cloudfront_distribution" "preview" {
     target_origin_id       = "S3-${aws_s3_bucket.preview.id}"
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
-    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
+    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
 
     function_association {
       event_type   = "viewer-request"
