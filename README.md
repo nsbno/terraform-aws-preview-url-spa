@@ -2,11 +2,6 @@
 
 Infrastructure to generate preview URLs for Single-Page Applications (SPAs).
 
-## Relevant Repositories
-
-- [`nsbno/terraform-aws-multi-domain-static-site`](https://github.com/nsbno/terraform-aws-multi-domain-static-site) - Production static site hosting module
-- [`nsbno/infrademo-spa`](https://github.com/nsbno/infrademo-spa) - Full working example implementation
-
 ## Usage
 
 Remember to check out the [**variables**](variables.tf) and [**outputs**](outputs.tf) to see all options.
@@ -14,24 +9,19 @@ Remember to check out the [**variables**](variables.tf) and [**outputs**](output
 ```hcl
 module "preview_url_spa" {
   source = "github.com/nsbno/terraform-aws-preview-url-spa?ref=x.y.z"
-  count  = var.environment == "test" ? 1 : 0  # Optional: only create the preview URL resources in test environment
+  
+  count  = var.environment == "test" ? 1 : 0          # Optional: only create the preview URL resources in test environment
 
-  providers = {
-    aws.us_east_1 = aws.us_east_1
-  }
-
-  service_name = "infrademo-spa"
-  domain_name  = "infrademo-spa.test.example.com"
-  zone_name    = "test.example.com"
+  service_name = "infrademo-spa"                      # Your service name (must match platform-actions workflow parameter)
+  domain_name  = "infrademo-spa.test.example.com"     # Your preview base domain (becomes pr-123.infrademo-spa.test.example.com)
+  zone_name    = "test.example.com"                   # Your Route53 hosted zone name
 }
 ```
 
-This creates:
-- S3 bucket for preview deployments (`{account-id}-{service}-preview`)
-- CloudFront distribution with wildcard domain support (`*.infrademo-spa.test.example.com`)
-- CloudFront Function for subdomain-to-path routing (e.g., `pr-123.infrademo-spa.test.example.com` → `/pr-123/` in S3)
-- ACM certificate for wildcard domain
-- Route53 wildcard DNS record
+## Relevant Repositories
+
+- [`nsbno/terraform-aws-multi-domain-static-site`](https://github.com/nsbno/terraform-aws-multi-domain-static-site) - Single-Page Application (SPA) infrastructure
+- [`nsbno/infrademo-spa`](https://github.com/nsbno/infrademo-spa) - Full working example implementation
 
 ## Architecture
 

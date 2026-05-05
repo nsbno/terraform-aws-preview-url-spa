@@ -44,8 +44,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "preview" {
 }
 
 resource "aws_cloudfront_origin_access_control" "preview" {
-  provider = aws.us_east_1
-
   name                              = "${var.service_name}-preview-oac"
   description                       = "Grants CloudFront access to S3 preview bucket"
   origin_access_control_origin_type = "s3"
@@ -85,8 +83,6 @@ resource "aws_s3_bucket_policy" "preview" {
 }
 
 resource "aws_cloudfront_function" "subdomain_router" {
-  provider = aws.us_east_1
-
   name    = "${var.service_name}-preview-router"
   runtime = "cloudfront-js-2.0"
   comment = "Routes PR subdomains to S3 prefix paths for ${var.service_name}"
@@ -121,8 +117,6 @@ module "preview_certificate" {
 }
 
 resource "aws_cloudfront_distribution" "preview" {
-  provider = aws.us_east_1
-
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "Serves PR preview deployments for ${var.service_name}"
