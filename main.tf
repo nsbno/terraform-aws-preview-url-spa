@@ -6,14 +6,10 @@ locals {
 }
 
 resource "aws_s3_bucket" "preview" {
-  provider = aws.us_east_1
-
   bucket = local.preview_bucket_name
 }
 
 resource "aws_s3_bucket_public_access_block" "preview" {
-  provider = aws.us_east_1
-
   bucket = aws_s3_bucket.preview.id
 
   block_public_acls       = true
@@ -23,8 +19,6 @@ resource "aws_s3_bucket_public_access_block" "preview" {
 }
 
 resource "aws_s3_bucket_versioning" "preview" {
-  provider = aws.us_east_1
-
   bucket = aws_s3_bucket.preview.id
 
   versioning_configuration {
@@ -32,44 +26,63 @@ resource "aws_s3_bucket_versioning" "preview" {
   }
 }
 
-resource "aws_cloudfront_origin_access_identity" "preview" {
-  provider = aws.us_east_1
+resource "aws_s3_bucket_lifecycle_configuration" "preview" {
+  bucket = aws_s3_bucket.preview.id
 
-  comment = "OAI for ${var.service_name} preview deployments"
+  rule {
+    id     = "delete-old-previews"
+    status = "Enabled"
+
+    expiration {
+      days = 7
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+}
+
+resource "aws_cloudfront_origin_access_control" "preview" {
+  name                              = "${var.service_name}-preview-oac"
+  description                       = "Grants CloudFront access to S3 preview bucket"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 data "aws_iam_policy_document" "preview_bucket_policy" {
   statement {
-    sid    = "AllowCloudFrontOAI"
+    sid    = "AllowCloudFrontOAC"
     effect = "Allow"
 
     principals {
-      type        = "AWS"
-      identifiers = [aws_cloudfront_origin_access_identity.preview.iam_arn]
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
     }
 
     actions = [
-      "s3:GetObject",
-      "s3:ListBucket"
+      "s3:GetObject"
     ]
 
     resources = [
-      aws_s3_bucket.preview.arn,
       "${aws_s3_bucket.preview.arn}/*"
     ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.preview.arn]
+    }
   }
 }
 
 resource "aws_s3_bucket_policy" "preview" {
-  provider = aws.us_east_1
-
   bucket = aws_s3_bucket.preview.id
   policy = data.aws_iam_policy_document.preview_bucket_policy.json
 }
 
 resource "aws_cloudfront_function" "subdomain_router" {
-  provider = aws.us_east_1
-
   name    = "${var.service_name}-preview-router"
   runtime = "cloudfront-js-2.0"
   comment = "Routes PR subdomains to S3 prefix paths for ${var.service_name}"
@@ -78,28 +91,80 @@ resource "aws_cloudfront_function" "subdomain_router" {
 }
 
 resource "aws_ssm_parameter" "preview_bucket_name" {
-  provider = aws.us_east_1
-
   name      = "/__deployment__/applications/${var.service_name}/preview-bucket-name"
   type      = "String"
   overwrite = true
   value     = aws_s3_bucket.preview.id
 }
 
-resource "aws_ssm_parameter" "cloudfront_function_arn" {
-  provider = aws.us_east_1
-
-  name      = "/__deployment__/applications/${var.service_name}/cloudfront-function-arn"
+resource "aws_ssm_parameter" "preview_domain_name" {
+  name      = "/__deployment__/applications/${var.service_name}/preview-domain-name"
   type      = "String"
   overwrite = true
-  value     = aws_cloudfront_function.subdomain_router.arn
+  value     = var.domain_name
 }
 
-resource "aws_ssm_parameter" "cloudfront_oai_path" {
-  provider = aws.us_east_1
+data "aws_route53_zone" "preview" {
+  name = var.zone_name
+}
 
-  name      = "/__deployment__/applications/${var.service_name}/cloudfront-oai-path"
-  type      = "String"
-  overwrite = true
-  value     = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.preview.id}"
+module "preview_certificate" {
+  source           = "github.com/nsbno/terraform-aws-acm-certificate?ref=3.1.1"
+  region           = "us-east-1"
+  hosted_zone_name = var.zone_name
+  domain_name      = var.domain_name
+  create_wildcard  = true
+}
+
+resource "aws_cloudfront_distribution" "preview" {
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "Serves PR preview deployments for ${var.service_name}"
+  default_root_object = "index.html"
+  price_class         = "PriceClass_100"
+  aliases             = ["*.${var.domain_name}"]
+
+  origin {
+    domain_name              = aws_s3_bucket.preview.bucket_regional_domain_name
+    origin_id                = "S3-${aws_s3_bucket.preview.id}"
+    origin_access_control_id = aws_cloudfront_origin_access_control.preview.id
+  }
+
+  default_cache_behavior {
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "S3-${aws_s3_bucket.preview.id}"
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.subdomain_router.arn
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = module.preview_certificate.wildcard_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+}
+
+resource "aws_route53_record" "preview_wildcard" {
+  zone_id = data.aws_route53_zone.preview.zone_id
+  name    = "*.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.preview.domain_name
+    zone_id                = aws_cloudfront_distribution.preview.hosted_zone_id
+    evaluate_target_health = false
+  }
 }
