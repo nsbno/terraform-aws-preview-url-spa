@@ -20,5 +20,5 @@ output "cloudfront_distribution_domain_name" {
 
 output "preview_domain" {
   description = "Base domain for preview URLs"
-  value       = var.domain_name
+  value       = var.base_domain_name
 }

@@ -9,11 +9,10 @@ Remember to check out the [**variables**](variables.tf) and [**outputs**](output
 ```hcl
 module "preview_url_spa" {
   source = "github.com/nsbno/terraform-aws-preview-url-spa?ref=x.y.z"
-  count  = var.environment == "test" ? 1 : 0          # Only create preview resources in test environment
+  count  = var.environment == "test" ? 1 : 0  # Only create preview resources in test environment
 
-  service_name = "infrademo-spa"                      # Your service name, must match `service_name` in the static_site_with_domain module (https://github.com/nsbno/terraform-aws-multi-domain-static-site)
-  domain_name  = "infrademo-spa.test.example.com"     # Your preview base domain (becomes pr-123.infrademo-spa.test.example.com)
-  zone_name    = "test.example.com"                   # Your Route53 hosted zone name
+  service_name     = module.static_site_with_domain.service_name  # Your service name
+  base_domain_name = "my-spa.${data.aws_route53_zone.this.name}"  # Your preview base domain (becomes pr-123.{base_domain_name}
 }
 ```
 

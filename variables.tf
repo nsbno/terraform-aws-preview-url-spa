@@ -3,12 +3,7 @@ variable "service_name" {
   type        = string
 }
 
-variable "domain_name" {
-  description = "Base domain for preview URLs (e.g., infrademo-spa.test.infrademo.vydev.io)"
-  type        = string
-}
-
-variable "zone_name" {
-  description = "Route53 zone name for DNS records (e.g., test.infrademo.vydev.io)"
+variable "base_domain_name" {
+  description = "Base domain for preview URLs (will be prefixed with pr-{number}). Example: my-spa.test.myteam.vydev.io results in pr-123.my-spa.test.myteam.vydev.io. The Route53 hosted zone will be automatically extracted from this domain."
   type        = string
 }

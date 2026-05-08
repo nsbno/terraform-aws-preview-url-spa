@@ -3,6 +3,10 @@ data "aws_caller_identity" "current" {}
 locals {
   account_id          = data.aws_caller_identity.current.account_id
   preview_bucket_name = "${local.account_id}-${var.service_name}-preview"
+  
+  # Extract zone name from base_domain_name
+  # Example: "my-spa.test.myteam.vydev.io" -> "test.myteam.vydev.io"
+  zone_name = join(".", slice(split(".", var.base_domain_name), 1, length(split(".", var.base_domain_name))))
 }
 
 resource "aws_s3_bucket" "preview" {
@@ -101,18 +105,18 @@ resource "aws_ssm_parameter" "preview_domain_name" {
   name      = "/__deployment__/applications/${var.service_name}/preview-domain-name"
   type      = "String"
   overwrite = true
-  value     = var.domain_name
+  value     = var.base_domain_name
 }
 
 data "aws_route53_zone" "preview" {
-  name = var.zone_name
+  name = local.zone_name
 }
 
 module "preview_certificate" {
   source           = "github.com/nsbno/terraform-aws-acm-certificate?ref=3.1.1"
   region           = "us-east-1"
-  hosted_zone_name = var.zone_name
-  domain_name      = var.domain_name
+  hosted_zone_name = local.zone_name
+  domain_name      = var.base_domain_name
   create_wildcard  = true
 }
 
@@ -122,7 +126,7 @@ resource "aws_cloudfront_distribution" "preview" {
   comment             = "Serves PR preview deployments for ${var.service_name}"
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
-  aliases             = ["*.${var.domain_name}"]
+  aliases             = ["*.${var.base_domain_name}"]
 
   origin {
     domain_name              = aws_s3_bucket.preview.bucket_regional_domain_name
@@ -159,7 +163,7 @@ resource "aws_cloudfront_distribution" "preview" {
 
 resource "aws_route53_record" "preview_wildcard" {
   zone_id = data.aws_route53_zone.preview.zone_id
-  name    = "*.${var.domain_name}"
+  name    = "*.${var.base_domain_name}"
   type    = "A"
 
   alias {
